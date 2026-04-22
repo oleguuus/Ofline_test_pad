@@ -25,7 +25,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS (Для локальной разработки может понадобиться)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
