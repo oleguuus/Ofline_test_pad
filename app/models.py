@@ -1,7 +1,7 @@
 from datetime import datetime
 from enum import Enum as PyEnum
 from typing import List, Optional, Any, Dict
-from sqlalchemy import String, Integer, Boolean, DateTime, Float, ForeignKey, JSON
+from sqlalchemy import String, Integer, Boolean, DateTime, Float, ForeignKey, JSON, Index, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -26,6 +26,7 @@ class Folder(Base):
 class Test(Base):
     __tablename__ = "tests"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    folder_id: Mapped[Optional[int]] = mapped_column(ForeignKey("folders.id", ondelete="SET NULL"), nullable=True)
     title: Mapped[str] = mapped_column(String, index=True)
     description: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     cover_image_path: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -35,6 +36,7 @@ class Test(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    folder: Mapped[Optional["Folder"]] = relationship("Folder")
     questions: Mapped[List["Question"]] = relationship("Question", back_populates="test")
     sessions: Mapped[List["Session"]] = relationship("Session", back_populates="test")
 
@@ -51,7 +53,9 @@ class Question(Base):
     # Используем JSON тип, SQLite автоматом под капотом использует TEXT
     content_payload: Mapped[dict] = mapped_column(JSON)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-
+    __table_args__ = (
+        Index("idx_questions_test", "test_id", sqlite_where=is_deleted == False),
+    )
     test: Mapped["Test"] = relationship("Test", back_populates="questions")
 
 class Session(Base):
@@ -71,16 +75,20 @@ class StudentResult(Base):
     __tablename__ = "student_results"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"))
-    session_token: Mapped[str] = mapped_column(String, unique=True, index=True)
+    session_token: Mapped[str] = mapped_column(String)
     full_name: Mapped[str] = mapped_column(String)
-    group_number: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    group_number: Mapped[str] = mapped_column(String, index=True)
+    ip_address: Mapped[str] = mapped_column(String)
     status: Mapped[str] = mapped_column(String)
-    score_raw: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    score_percentage: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    score_raw: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
+    score_percentage: Mapped[Optional[float]] = mapped_column(Float, default=0.0)
     cheat_blur_count: Mapped[int] = mapped_column(Integer, default=0)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("session_id", "session_token", name="idx_student_unique_session"),
+    )
 
     session: Mapped["Session"] = relationship("Session", back_populates="student_results")
     answers: Mapped[List["StudentAnswer"]] = relationship("StudentAnswer", back_populates="student_result")
